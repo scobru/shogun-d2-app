@@ -1,0 +1,19 @@
+{
+  "name": "shogun-d2",
+  "version": "1.0.0",
+  "description": "Decentralized networking layer with encryption",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "serve": "vite serve"
+  },
+  "dependencies": {
+    "gun": "^0.2020.1235",
+    "vercel": "^44.2.8"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}

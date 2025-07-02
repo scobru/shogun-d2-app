@@ -1,12 +1,10 @@
 (function () {
-  function Bugoff(identifier, opts, pair) {
+  function Bugoff(identifier, opts) {
     // Handle different initialization patterns
     if (typeof identifier === 'object' && !opts) {
       opts = identifier;
       identifier = undefined;
     }
-
-    console.log(derive)
     
     this.events = new EventEmitter();
     this.opts = opts || {};
