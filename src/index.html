@@ -1,211 +1,339 @@
-<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta content="width=device-width, initial-scale=1" name="viewport" />
-    <title>d2 - P2P Messenger</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    <style>
-      :root {
-        /* Dark Theme Colors */
-        --dark-bg-start: #1A1240;
-        --dark-bg-end: #0A0821;
-        --dark-card-bg: #1C1B22;
-        --dark-input-bg: #2A2931;
-        --dark-text-primary: #FFFFFF;
-        --dark-text-secondary: #A0AEC0;
-        --dark-border: rgba(255, 255, 255, 0.1);
-        
-        /* Light Theme Colors */
-        --light-bg: #F7FAFC;
-        --light-card-bg: #FFFFFF;
-        --light-input-bg: #EDF2F7;
-        --light-text-primary: #1A202C;
-        --light-text-secondary: #4A5568;
-        --light-border: #E2E8F0;
+<!DOCTYPE html>
+<html lang="en">
 
-        /* Common & Accent Colors */
-        --accent-pink: #FF4D94;
-        --accent-yellow: #FFD700;
-        --border-radius: 14px;
-        --spacing: 16px;
-        --transition: all 0.2s ease-in-out;
-        --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-      }
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>d2 - Decentralized Networking Layer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .gradient-bg {
+      background: linear-gradient(135deg, #e0f2fe, #b3e5fc, #81d4fa);
+    }
 
-      [data-theme="dark"] {
-        --bg-gradient: linear-gradient(180deg, var(--dark-bg-start) 0%, var(--dark-bg-end) 100%);
-        --text-primary: var(--dark-text-primary);
-        --text-secondary: var(--dark-text-secondary);
-        --accent-color: var(--accent-pink);
-        --border-color: var(--dark-border);
-        --card-color: var(--dark-card-bg);
-      }
+    .gradient-text {
+      background: linear-gradient(135deg, #0284c7, #0ea5e9);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
 
-      [data-theme="light"] {
-        --bg-gradient: var(--light-bg);
-        --text-primary: var(--light-text-primary);
-        --text-secondary: var(--light-text-secondary);
-        --accent-color: var(--accent-pink);
-        --border-color: var(--light-border);
-        --card-color: var(--light-card-bg);
+    .feature-card {
+      background: rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(10px);
+      transition: all 0.3s ease;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 20px 40px rgba(2, 132, 199, 0.2);
+    }
+
+    .demo-network {
+      animation: fadeInUp 0.6s ease-out;
+    }
+
+    .demo-network:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    .demo-network:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
       }
 
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .pulse-dot {
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(2, 132, 199, 0.7);
       }
 
-      body { 
-        font-family: var(--font-family);
-        background: var(--bg-gradient);
-        color: var(--text-primary);
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        min-height: 100vh;
-        padding: var(--spacing);
-        text-align: center;
+      70% {
+        transform: scale(1);
+        box-shadow: 0 0 0 10px rgba(2, 132, 199, 0);
       }
 
-      .header {
-        position: absolute;
-        top: var(--spacing);
-        right: var(--spacing);
+      100% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(2, 132, 199, 0);
       }
-      
-      .theme-toggle {
-        background: var(--card-color);
-        border: 1px solid var(--border-color);
-        color: var(--text-primary);
-        cursor: pointer;
-        width: 44px;
-        height: 44px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.2rem;
-        transition: var(--transition);
-      }
+    }
 
-      .theme-toggle:hover {
-        border-color: var(--accent-color);
-        color: var(--accent-color);
-      }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+  </style>
+</head>
 
-      .card {
-        background-color: var(--card-color);
-        border: 1px solid var(--border-color);
-        padding: calc(var(--spacing) * 2);
-        border-radius: var(--border-radius);
-        max-width: 500px;
-        width: 100%;
-      }
-      
-      h1 {
-        font-size: 2.5rem;
-        font-weight: 600;
-        color: var(--text-primary);
-        margin-bottom: var(--spacing);
-      }
-      
-      p {
-        color: var(--text-secondary);
-        margin-bottom: calc(var(--spacing) * 2);
-      }
-      
-      .button-group {
-        display: flex;
-        gap: var(--spacing);
-        justify-content: center;
-      }
-      
-      .btn {
-        background-color: var(--accent-color);
-        color: white;
-        border: none;
-        padding: 12px var(--spacing);
-        border-radius: var(--border-radius);
-        font-family: var(--font-family);
-        font-size: 1rem;
-        font-weight: 500;
-        text-decoration: none;
-        transition: var(--transition);
-        cursor: pointer;
-      }
-      
-      .btn:hover {
-        opacity: 0.9;
-      }
-      
-      footer {
-        position: absolute;
-        bottom: var(--spacing);
-        text-align: center;
-        width: 100%;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="header">
-      <button class="theme-toggle" id="themeToggle">🌙</button>
-    </div>
-    
-    <div class="card">
-        <img src="logo.svg" alt="SHOGUN Logo" style="height: 80px; margin-bottom: var(--spacing);">
-        <h1>d2 Messenger</h1>
-        <p>A minimal, decentralized, peer-to-peer messenger.<br>Choose your role to get started.</p>
-        <div class="button-group">
-            <a href="./server" class="btn">Start Server</a>
-            <a href="./client" class="btn">Open Client</a>
-        </div>
-    </div>
-    
-    <footer>
-      <div style="text-align: center;">
-          <p style="color: var(--text-secondary); margin: 0; font-size: 0.9rem; line-height: 1.5;">
-              <a href="https://github.com/scobru/shogun-d2-app" style="color: var(--accent-color); text-decoration: none;">repo</a>
-              build with ❤️ by 
-              <a href="https://github.com/scobru" style="color: var(--accent-color); text-decoration: none;">scobru</a>
-              • part of 
-              <a href="https://shogun-info.vercel.app" style="color: var(--accent-color); text-decoration: none;">shogun project</a>
-          </p>
+<body class="gradient-bg">
+  <!-- Header -->
+  <header class="relative z-10 p-6">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <div class="flex items-center space-x-2">
+        <div class="h-8 w-8 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-lg"></div>
+        <span class="text-xl font-bold text-gray-900">Shogun</span>
       </div>
-    </footer>
 
-    <script>
-      const themeToggle = document.getElementById('themeToggle');
-      
-      const applyTheme = (theme) => {
-        if (theme === 'dark') {
-          document.body.setAttribute('data-theme', 'dark');
-          themeToggle.textContent = '☀️';
-        } else {
-          document.body.setAttribute('data-theme', 'light');
-          themeToggle.textContent = '🌙';
-        }
-      };
+      <div class="flex items-center space-x-4">
+        <img src="logo.svg" alt="Shogun Logo" class="h-10 w-10" />
+        <span class="text-2xl font-bold gradient-text">
+          d2
+        </span>
+      </div>
+    </div>
+  </header>
 
-      const getInitialTheme = () => {
-        const savedTheme = localStorage.getItem('theme');
-        if (savedTheme) {
-          return savedTheme;
-        }
-        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        return prefersDark ? 'dark' : 'light';
-      };
+  <!-- Hero Section -->
+  <main class="relative">
+    <div class="max-w-7xl mx-auto px-6 py-20">
+      <div class="text-center">
+        <div class="flex justify-center mb-8">
+          <img src="logo.svg" alt="Shogun Logo" class="h-20 w-20" />
+        </div>
 
-      let currentTheme = getInitialTheme();
-      applyTheme(currentTheme);
+        <h1 class="text-6xl font-bold text-gray-900 mb-6">
+          The Future of{" "}
+          <span class="gradient-text">
+            Decentralized
+          </span>
+          <br />
+          Networking
+        </h1>
 
-      themeToggle.addEventListener('click', () => {
-        currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
-        localStorage.setItem('theme', currentTheme);
-        applyTheme(currentTheme);
-      });
-    </script>
-  </body>
-</html> 
+        <p class="text-xl text-gray-600 mb-12 max-w-3xl mx-auto">
+          Experience truly secure, peer-to-peer networking powered by Bugout and enhanced encryption.
+          No central servers, complete privacy, and robust peer discovery.
+        </p>
+
+        <div class="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16">
+          <a href="server.html"
+            class="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white px-8 py-4 text-lg font-semibold rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg">
+            🚀 Launch Network App
+          </a>
+          <a href="#features"
+            class="border-2 border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white px-8 py-4 text-lg font-semibold rounded-lg transition-all duration-200">
+            Learn More
+          </a>
+        </div>
+
+        <!-- Demo Network Interface -->
+        <div class="relative max-w-4xl mx-auto">
+          <div class="bg-white rounded-2xl shadow-2xl p-8 border">
+            <div class="flex items-center space-x-2 mb-6">
+              <div class="h-3 w-3 bg-red-500 rounded-full"></div>
+              <div class="h-3 w-3 bg-yellow-500 rounded-full"></div>
+              <div class="h-3 w-3 bg-green-500 rounded-full"></div>
+              <div class="ml-4 flex items-center space-x-2">
+                <img src="logo.svg" alt="Shogun" class="h-5 w-5" />
+                <span class="text-sm font-medium text-gray-700">d2</span>
+              </div>
+            </div>
+
+            <div class="space-y-4">
+              <div class="demo-network flex justify-end">
+                <div class="bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-4 py-2 rounded-lg max-w-xs">
+                  🔐 Connected to network with end-to-end encryption
+                </div>
+              </div>
+              <div class="demo-network flex justify-start">
+                <div class="bg-gray-100 text-gray-800 px-4 py-2 rounded-lg max-w-xs">
+                  🌐 Peer discovered: 0x1234...5678
+                </div>
+              </div>
+              <div class="demo-network flex justify-end">
+                <div class="bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-4 py-2 rounded-lg max-w-xs">
+                  📡 Broadcasting secure message to all peers
+                </div>
+              </div>
+              <div class="flex justify-center mt-4">
+                <div class="pulse-dot h-2 w-2 bg-blue-600 rounded-full"></div>
+                <div class="pulse-dot h-2 w-2 bg-blue-600 rounded-full mx-1" style="animation-delay: 0.2s"></div>
+                <div class="pulse-dot h-2 w-2 bg-blue-600 rounded-full" style="animation-delay: 0.4s">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Features Section -->
+  <section id="features" class="py-20 bg-white bg-opacity-50">
+    <div class="max-w-7xl mx-auto px-6">
+      <div class="text-center mb-16">
+        <h2 class="text-4xl font-bold text-gray-900 mb-4">
+          Why Choose <span class="gradient-text">Shogun-D2</span>?
+        </h2>
+        <p class="text-xl text-gray-600 max-w-3xl mx-auto">
+          Revolutionary networking features that put you in control of your connections
+        </p>
+      </div>
+
+      <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <div class="feature-card rounded-2xl p-8 text-center border">
+          <div class="text-5xl mb-4">🔒</div>
+          <h3 class="text-xl font-bold text-gray-900 mb-4">End-to-End Encryption</h3>
+          <p class="text-gray-600">
+            Military-grade SEA encryption ensures all network communications remain completely secure.
+          </p>
+        </div>
+
+        <div class="feature-card rounded-2xl p-8 text-center border">
+          <div class="text-5xl mb-4">🌐</div>
+          <h3 class="text-xl font-bold text-gray-900 mb-4">Peer-to-Peer Network</h3>
+          <p class="text-gray-600">
+            Direct communication over WebRTC without central servers. Your network, your rules.
+          </p>
+        </div>
+
+        <div class="feature-card rounded-2xl p-8 text-center border">
+          <div class="text-5xl mb-4">🔑</div>
+          <h3 class="text-xl font-bold text-gray-900 mb-4">Automatic Key Exchange</h3>
+          <p class="text-gray-600">
+            Seamless key management and peer discovery for secure network connections.
+          </p>
+        </div>
+
+        <div class="feature-card rounded-2xl p-8 text-center border">
+          <div class="text-5xl mb-4">📡</div>
+          <h3 class="text-xl font-bold text-gray-900 mb-4">Broadcast & Direct</h3>
+          <p class="text-gray-600">
+            Support for both broadcast messaging and direct peer-to-peer communication.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Technical Features -->
+  <section class="py-20">
+    <div class="max-w-7xl mx-auto px-6">
+      <div class="text-center mb-16">
+        <h2 class="text-4xl font-bold text-gray-900 mb-4">
+          Technical <span class="gradient-text">Excellence</span>
+        </h2>
+        <p class="text-xl text-gray-600 max-w-3xl mx-auto">
+          Built with modern technologies for maximum reliability and performance
+        </p>
+      </div>
+
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div class="feature-card rounded-2xl p-8 text-center border">
+          <div class="text-5xl mb-4">💪</div>
+          <h3 class="text-xl font-bold text-gray-900 mb-4">Robust Error Handling</h3>
+          <p class="text-gray-600">
+            Advanced error handling and automatic connection recovery for reliable networking.
+          </p>
+        </div>
+
+        <div class="feature-card rounded-2xl p-8 text-center border">
+          <div class="text-5xl mb-4">🔄</div>
+          <h3 class="text-xl font-bold text-gray-900 mb-4">Event-Driven Architecture</h3>
+          <p class="text-gray-600">
+            Reactive design with comprehensive event system for real-time network updates.
+          </p>
+        </div>
+
+        <div class="feature-card rounded-2xl p-8 text-center border">
+          <div class="text-5xl mb-4">🛡️</div>
+          <h3 class="text-xl font-bold text-gray-900 mb-4">Secure Seed Management</h3>
+          <p class="text-gray-600">
+            Deterministic addressing with secure seed generation for consistent network identity.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Stats Section -->
+  <section class="py-20">
+    <div class="max-w-7xl mx-auto px-6">
+      <div class="bg-gradient-to-r from-blue-600 to-cyan-600 rounded-3xl p-12 text-white text-center">
+        <h2 class="text-3xl font-bold mb-12">Powered by Innovation</h2>
+        <div class="grid md:grid-cols-3 gap-8">
+          <div>
+            <div class="text-5xl font-bold mb-2">∞</div>
+            <div class="text-xl">Decentralized Peers</div>
+          </div>
+          <div>
+            <div class="text-5xl font-bold mb-2">0</div>
+            <div class="text-xl">Central Servers</div>
+          </div>
+          <div>
+            <div class="text-5xl font-bold mb-2">100%</div>
+            <div class="text-xl">Encrypted Traffic</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Section -->
+  <section class="py-20 bg-white bg-opacity-50">
+    <div class="max-w-4xl mx-auto px-6 text-center">
+      <h2 class="text-4xl font-bold text-gray-900 mb-6">
+        Ready to Experience True <span class="gradient-text">Decentralization</span>?
+      </h2>
+      <p class="text-xl text-gray-600 mb-8">
+        Join the decentralized networking revolution today.
+      </p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
+        <a href="client.html"
+          class="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white px-10 py-4 text-xl font-semibold rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg inline-block">
+          🚀 Launch Network App
+        </a>
+        <a href="server.html"
+          class="border-2 border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white px-10 py-4 text-xl font-semibold rounded-lg transition-all duration-200">
+          🔧 Server Interface
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="bg-gray-900 text-white py-12">
+    <div class="max-w-7xl mx-auto px-6 text-center">
+      <div class="flex items-center justify-center space-x-2 mb-4">
+        <img src="logo.svg" alt="Shogun" class="h-8 w-8" />
+        <span class="text-xl font-bold">shogun-d2</span>
+      </div>
+      <p class="text-gray-400 mb-4">
+        Powered by Shogun Core & Bugout - The future of decentralized networking
+      </p>
+      <div class="text-sm text-gray-500">
+        <a href="https://github.com/scobru/shogun-d2-app" target="_blank" rel="noopener noreferrer"
+          class="hover:text-white transition-colors">
+          GitHub Repository
+        </a>
+        {' | Built with ❤️ by '}
+        <a href="https://github.com/scobru" target="_blank" rel="noopener noreferrer"
+          class="hover:text-white transition-colors">
+          scobru
+        </a>
+        {' | Part of the '}
+        <a href="https://shogun-info.vercel.app" target="_blank" rel="noopener noreferrer"
+          class="hover:text-white transition-colors">
+          Shogun Project
+        </a>
+      </div>
+    </div>
+  </footer>
+</body>
+
+</html>

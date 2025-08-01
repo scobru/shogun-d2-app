@@ -1,719 +1,725 @@
 <!doctype html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <meta content="width=device-width, initial-scale=1" name="viewport" />
-    <title>d2 client</title>
-    <script src="https://cdn.jsdelivr.net/npm/eventemitter3@4.0.0/index.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bugout@0.0.13/docs/bugout.min.js"></script>
-    <script>
-      (function () {
-        function Bugoff(identifier, opts) {
-          // Handle different initialization patterns
-          if (typeof identifier === 'object' && !opts) {
-            opts = identifier;
-            identifier = undefined;
-          }
-          
-          this.events = new EventEmitter();
-          this.opts = opts || {};
-          
-          // Handle seed properly to avoid checksum errors
-          if (this.opts.seed) {
-            try {
-              // Try to validate the seed format
-              if (typeof this.opts.seed !== 'string' || this.opts.seed.length < 5) {
-                console.warn("Invalid seed format, generating a new one");
-                delete this.opts.seed;
-              }
-            } catch (e) {
-              console.warn("Error validating seed, generating a new one:", e);
+
+<head>
+  <meta charset="utf-8" />
+  <meta content="width=device-width, initial-scale=1" name="viewport" />
+  <title>d2</title>
+  <script src="https://cdn.jsdelivr.net/npm/eventemitter3@4.0.0/index.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bugout@0.0.13/docs/bugout.min.js"></script>
+  <script>
+    (function () {
+      function Bugoff(identifier, opts) {
+        // Handle different initialization patterns
+        if (typeof identifier === 'object' && !opts) {
+          opts = identifier;
+          identifier = undefined;
+        }
+
+        this.events = new EventEmitter();
+        this.opts = opts || {};
+
+        // Handle seed properly to avoid checksum errors
+        if (this.opts.seed) {
+          try {
+            // Try to validate the seed format
+            if (typeof this.opts.seed !== 'string' || this.opts.seed.length < 5) {
+              console.warn("Invalid seed format, generating a new one");
               delete this.opts.seed;
             }
+          } catch (e) {
+            console.warn("Error validating seed, generating a new one:", e);
+            delete this.opts.seed;
           }
-          
-          // Initialize Bugout with proper parameters
+        }
+
+        // Initialize Bugout with proper parameters
+        try {
+          // Create Bugout instance without seed first if we have an identifier
+          if (identifier) {
+            this.bugout = new Bugout(identifier);
+          } else {
+            // Create with options (possibly including seed) if no identifier
+            this.bugout = new Bugout(this.opts);
+          }
+
+          this.seed = this.bugout.seed;
+          this.identifier = this.bugout.identifier;
+          this.ID = sha(this.identifier);
+
+          // Store address as property but also provide it as a method
+          this._address = this.bugout.address();
+          this.address = function () {
+            return this._address;
+          };
+        } catch (error) {
+          console.error("Error initializing Bugout:", error);
+          // Try again with a fresh instance without seed or identifier
           try {
-            // Create Bugout instance without seed first if we have an identifier
-            if (identifier) {
-              this.bugout = new Bugout(identifier);
-            } else {
-              // Create with options (possibly including seed) if no identifier
-              this.bugout = new Bugout(this.opts);
-            }
-            
+            console.log("Retrying with a fresh Bugout instance...");
+            this.bugout = new Bugout();
             this.seed = this.bugout.seed;
             this.identifier = this.bugout.identifier;
             this.ID = sha(this.identifier);
-            
+
             // Store address as property but also provide it as a method
             this._address = this.bugout.address();
-            this.address = function() {
+            this.address = function () {
               return this._address;
             };
-          } catch (error) {
-            console.error("Error initializing Bugout:", error);
-            // Try again with a fresh instance without seed or identifier
-            try {
-              console.log("Retrying with a fresh Bugout instance...");
-              this.bugout = new Bugout();
-              this.seed = this.bugout.seed;
-              this.identifier = this.bugout.identifier;
-              this.ID = sha(this.identifier);
-              
-              // Store address as property but also provide it as a method
-              this._address = this.bugout.address();
-              this.address = function() {
-                return this._address;
-              };
-            } catch (retryError) {
-              console.error("Fatal error initializing Bugout:", retryError);
-              throw retryError;
-            }
+          } catch (retryError) {
+            console.error("Fatal error initializing Bugout:", retryError);
+            throw retryError;
           }
-          
-          this.peers = {};
-          this.SEA = async (pair) => {
-            this.sea = pair || await SEA.pair();
-            return this.sea;
-          };
-          
-          // Bugout internals bindings
-          this.on = this.bugout.on.bind(this.bugout);
-          this.once = this.bugout.once.bind(this.bugout);
-          this.register = this.bugout.register.bind(this.bugout);
-          this.rpc = this.bugout.rpc.bind(this.bugout);
-          this.heartbeat = (interval) => {
-            // Hearbeat patch while waiting for Bugout update in NPM
-            return this.bugout.heartbeat(interval);
-          };
-          this.destroy = this.bugout.destroy.bind(this.bugout);
-          this.send = this.bugout.send.bind(this.bugout); // Add direct send method for compatibility
+        }
 
-          // Bugoff encryption features
-          this.encryptionEnabled = false;
-          
-          // Setup encryption only if SEA is available
-          if (typeof SEA !== 'undefined') {
-            this.encryptionEnabled = true;
-            
-            // Override the default send method with encrypted version
-            const originalSend = this.send;
-            
-            this.events.on('encoded', encrypted => {
-              if(typeof encrypted === 'object') originalSend(encrypted[0], encrypted[1]);
-              else originalSend(this.address(), encrypted);
-            });
+        this.peers = {};
+        this.SEA = async (pair) => {
+          this.sea = pair || await SEA.pair();
+          return this.sea;
+        };
 
-            this.on('message', async (address, message) => {
-              // Try to decrypt if encryption is enabled
-              if (this.encryptionEnabled && this.sea) {
-                try {
-                  let decrypted = await decrypt(address, message);
-                  let addr = decrypted.address;
-                  let pubkeys = decrypted.pubkeys;
-                  let msg = decrypted.message;
-                  if(decrypted && msg) this.bugout.emit('decrypted', addr, pubkeys, msg);
-                } catch (e) {
-                  // If decryption fails, treat as normal message
-                  console.log("Decryption failed, treating as normal message");
-                }
+        // Bugout internals bindings
+        this.on = this.bugout.on.bind(this.bugout);
+        this.once = this.bugout.once.bind(this.bugout);
+        this.register = this.bugout.register.bind(this.bugout);
+        this.rpc = this.bugout.rpc.bind(this.bugout);
+        this.heartbeat = (interval) => {
+          // Hearbeat patch while waiting for Bugout update in NPM
+          return this.bugout.heartbeat(interval);
+        };
+        this.destroy = this.bugout.destroy.bind(this.bugout);
+        this.send = this.bugout.send.bind(this.bugout); // Add direct send method for compatibility
+
+        // Bugoff encryption features
+        this.encryptionEnabled = false;
+
+        // Setup encryption only if SEA is available
+        if (typeof SEA !== 'undefined') {
+          this.encryptionEnabled = true;
+
+          // Override the default send method with encrypted version
+          const originalSend = this.send;
+
+          this.events.on('encoded', encrypted => {
+            if (typeof encrypted === 'object') originalSend(encrypted[0], encrypted[1]);
+            else originalSend(this.address(), encrypted);
+          });
+
+          this.on('message', async (address, message) => {
+            // Try to decrypt if encryption is enabled
+            if (this.encryptionEnabled && this.sea) {
+              try {
+                let decrypted = await decrypt(address, message);
+                let addr = decrypted.address;
+                let pubkeys = decrypted.pubkeys;
+                let msg = decrypted.message;
+                if (decrypted && msg) this.bugout.emit('decrypted', addr, pubkeys, msg);
+              } catch (e) {
+                // If decryption fails, treat as normal message
+                console.log("Decryption failed, treating as normal message");
               }
-            });
+            }
+          });
 
-            let encrypt = async (address, message) => {
-              // If encryption not enabled or SEA not initialized, use original send
-              if (!this.encryptionEnabled || !this.sea) {
+          let encrypt = async (address, message) => {
+            // If encryption not enabled or SEA not initialized, use original send
+            if (!this.encryptionEnabled || !this.sea) {
+              return originalSend(address, message);
+            }
+
+            // Wait for peers if none available
+            if (Object.keys(this.peers).length === 0) {
+              try {
+                await new Promise((resolve, reject) => {
+                  const timeout = setTimeout(() => {
+                    reject(new Error("Timeout waiting for peers"));
+                  }, 5000);
+
+                  this.events.once('newPeer', () => {
+                    clearTimeout(timeout);
+                    resolve();
+                  });
+                });
+              } catch (e) {
+                console.warn("No peers available for encryption, sending unencrypted");
                 return originalSend(address, message);
               }
-              
-              // Wait for peers if none available
-              if (Object.keys(this.peers).length === 0) {
-                try {
-                  await new Promise((resolve, reject) => {
-                    const timeout = setTimeout(() => {
-                      reject(new Error("Timeout waiting for peers"));
-                    }, 5000);
-                    
-                    this.events.once('newPeer', () => {
-                      clearTimeout(timeout);
-                      resolve();
-                    });
-                  });
-                } catch (e) {
-                  console.warn("No peers available for encryption, sending unencrypted");
-                  return originalSend(address, message);
-                }
-              }
-              
-              if(!message) {
-                let msg = address;
-                // this is a broadcast message, encrypt with this instance SEA pair
-                for(let peer in this.peers){
-                  try {
-                    let enc = [peer, await SEA.encrypt(msg, await SEA.secret(this.peers[peer].epub, this.sea))];
-                    this.events.emit('encoded', enc);
-                  } catch (e) {
-                    console.error("Encryption error:", e);
-                  }
-                }
-              } else if(message) {
-                // this is a direct message
-                try {
-                  if (this.peers[address] && this.peers[address].epub) {
-                    let enc = await SEA.encrypt(message, await SEA.secret(this.peers[address].epub, this.sea));
-                    this.events.emit('encoded', [address, enc]);
-                  } else {
-                    // Fallback to unencrypted if peer key not available
-                    originalSend(address, message);
-                  }
-                } catch (e) {
-                  console.error("Encryption error:", e);
-                  originalSend(address, message);
-                }
-              }
-            };
-
-            // Replace send with encrypt only if encryption is enabled
-            if (this.encryptionEnabled) {
-              this.encryptedSend = encrypt;
-              // Keep original send available but use encrypted by default
-              this.send = encrypt;
             }
 
-            let decrypt = async (address, message) => {
-              let pubkeys = null;
-              for(let peer in this.peers){
-                if(peer === address){
-                  pubkeys = {pub: this.peers[peer].pub, epub: this.peers[peer].epub};
+            if (!message) {
+              let msg = address;
+              // this is a broadcast message, encrypt with this instance SEA pair
+              for (let peer in this.peers) {
+                try {
+                  let enc = [peer, await SEA.encrypt(msg, await SEA.secret(this.peers[peer].epub, this.sea))];
+                  this.events.emit('encoded', enc);
+                } catch (e) {
+                  console.error("Encryption error:", e);
                 }
               }
-              
-              if (!pubkeys || !this.sea) {
-                return { address: address, pubkeys: null, message: message };
-              }
-              
+            } else if (message) {
+              // this is a direct message
               try {
-                let decryptedMsg = await SEA.decrypt(message, await SEA.secret(this.peers[address].epub, this.sea));
-                return { address: address, pubkeys: pubkeys, message: decryptedMsg };
+                if (this.peers[address] && this.peers[address].epub) {
+                  let enc = await SEA.encrypt(message, await SEA.secret(this.peers[address].epub, this.sea));
+                  this.events.emit('encoded', [address, enc]);
+                } else {
+                  // Fallback to unencrypted if peer key not available
+                  originalSend(address, message);
+                }
               } catch (e) {
-                console.error("Decryption error:", e);
-                return { address: address, pubkeys: pubkeys, message: message };
+                console.error("Encryption error:", e);
+                originalSend(address, message);
               }
-            };
+            }
+          };
 
-            this.register('peer', (address, sea, cb) => {
-              if (sea && sea.pub && sea.epub) {
-                Object.assign(this.peers, {[address]:{pub: sea.pub, epub: sea.epub}});
-                this.events.emit('newPeer', this.peers);
-                if (cb) cb(true);
-              } else {
-                if (cb) cb(false);
-              }
-            });
-
-            this.on('seen', async address => {
-              if (this.sea) {
-                this.rpc(address, 'peer', await this.sea);
-              }
-            });
+          // Replace send with encrypt only if encryption is enabled
+          if (this.encryptionEnabled) {
+            this.encryptedSend = encrypt;
+            // Keep original send available but use encrypted by default
+            this.send = encrypt;
           }
+
+          let decrypt = async (address, message) => {
+            let pubkeys = null;
+            for (let peer in this.peers) {
+              if (peer === address) {
+                pubkeys = { pub: this.peers[peer].pub, epub: this.peers[peer].epub };
+              }
+            }
+
+            if (!pubkeys || !this.sea) {
+              return { address: address, pubkeys: null, message: message };
+            }
+
+            try {
+              let decryptedMsg = await SEA.decrypt(message, await SEA.secret(this.peers[address].epub, this.sea));
+              return { address: address, pubkeys: pubkeys, message: decryptedMsg };
+            } catch (e) {
+              console.error("Decryption error:", e);
+              return { address: address, pubkeys: pubkeys, message: message };
+            }
+          };
+
+          this.register('peer', (address, sea, cb) => {
+            if (sea && sea.pub && sea.epub) {
+              Object.assign(this.peers, { [address]: { pub: sea.pub, epub: sea.epub } });
+              this.events.emit('newPeer', this.peers);
+              if (cb) cb(true);
+            } else {
+              if (cb) cb(false);
+            }
+          });
+
+          this.on('seen', async address => {
+            if (this.sea) {
+              this.rpc(address, 'peer', await this.sea);
+            }
+          });
         }
-
-        function sha(input){
-          // Use CryptoJS for browser compatibility
-          if (!input) return "";
-          return CryptoJS.SHA256(JSON.stringify(input)).toString(CryptoJS.enc.Hex);
-        }
-
-        if (typeof module !== 'undefined' && module.exports) {
-          module.exports = Bugoff;
-        } else {
-          window.Bugoff = Bugoff;
-        }
-      })();
-    </script>
-    <script src="https://cdn.jsdelivr.net/npm/shogun-core@1.3.5/dist/browser/shogun-core.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-
-    <style>
-      :root {
-        /* Dark Theme Colors */
-        --dark-bg-start: #1A1240;
-        --dark-bg-end: #0A0821;
-        --dark-card-bg: #1C1B22;
-        --dark-input-bg: #2A2931;
-        --dark-text-primary: #FFFFFF;
-        --dark-text-secondary: #A0AEC0;
-        --dark-border: rgba(255, 255, 255, 0.1);
-        
-        /* Light Theme Colors */
-        --light-bg: #F7FAFC;
-        --light-card-bg: #FFFFFF;
-        --light-input-bg: #EDF2F7;
-        --light-text-primary: #1A202C;
-        --light-text-secondary: #4A5568;
-        --light-border: #E2E8F0;
-
-        /* Common & Accent Colors */
-        --accent-pink: #FF4D94;
-        --accent-yellow: #FFD700;
-        --border-radius: 14px;
-        --spacing: 16px;
-        --transition: all 0.2s ease-in-out;
-        --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
       }
 
-      [data-theme="dark"] {
-        --bg-gradient: linear-gradient(180deg, var(--dark-bg-start) 0%, var(--dark-bg-end) 100%);
-        --bg-color: var(--dark-card-bg);
-        --card-color: var(--dark-card-bg);
-        --input-color: var(--dark-input-bg);
-        --text-primary: var(--dark-text-primary);
-        --text-secondary: var(--dark-text-secondary);
-        --accent-color: var(--accent-pink);
-        --border-color: var(--dark-border);
+      function sha(input) {
+        // Use CryptoJS for browser compatibility
+        if (!input) return "";
+        return CryptoJS.SHA256(JSON.stringify(input)).toString(CryptoJS.enc.Hex);
       }
 
-      [data-theme="light"] {
-        --bg-gradient: var(--light-bg);
-        --bg-color: var(--light-bg);
-        --card-color: var(--light-card-bg);
-        --input-color: var(--light-input-bg);
-        --text-primary: var(--light-text-primary);
-        --text-secondary: var(--light-text-secondary);
-        --accent-color: var(--accent-pink);
-        --border-color: var(--light-border);
+      if (typeof module !== 'undefined' && module.exports) {
+        module.exports = Bugoff;
+      } else {
+        window.Bugoff = Bugoff;
       }
+    })();
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/shogun-core@1.3.5/dist/browser/shogun-core.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
+  <style>
+    :root {
+      /* Dark Theme Colors */
+      --dark-bg-start: #1A1240;
+      --dark-bg-end: #0A0821;
+      --dark-card-bg: #1C1B22;
+      --dark-input-bg: #2A2931;
+      --dark-text-primary: #FFFFFF;
+      --dark-text-secondary: #A0AEC0;
+      --dark-border: rgba(255, 255, 255, 0.1);
 
-      body { 
-        font-family: var(--font-family);
-        background: var(--bg-gradient);
-        color: var(--text-primary);
-        line-height: 1.6;
-        transition: var(--transition);
-        min-height: 100vh;
-        background-attachment: fixed;
-        padding: var(--spacing);
-      }
+      /* Light Theme Colors */
+      --light-bg: #F7FAFC;
+      --light-card-bg: #FFFFFF;
+      --light-input-bg: #EDF2F7;
+      --light-text-primary: #1A202C;
+      --light-text-secondary: #4A5568;
+      --light-border: #E2E8F0;
 
-      .container {
-        max-width: 1200px;
-        margin: 0 auto;
-        min-height: 100vh;
-        display: flex;
-        flex-direction: column;
-        gap: var(--spacing);
-      }
+      /* Common & Accent Colors */
+      --accent-pink: #FF4D94;
+      --accent-yellow: #FFD700;
+      --border-radius: 14px;
+      --spacing: 16px;
+      --transition: all 0.2s ease-in-out;
+      --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
 
-      .header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: var(--spacing);
-        padding-bottom: var(--spacing);
-        border-bottom: 1px solid var(--border-color);
-      }
+    [data-theme="dark"] {
+      --bg-gradient: linear-gradient(180deg, var(--dark-bg-start) 0%, var(--dark-bg-end) 100%);
+      --bg-color: var(--dark-card-bg);
+      --card-color: var(--dark-card-bg);
+      --input-color: var(--dark-input-bg);
+      --text-primary: var(--dark-text-primary);
+      --text-secondary: var(--dark-text-secondary);
+      --accent-color: var(--accent-pink);
+      --border-color: var(--dark-border);
+    }
 
-      h1 {
-        font-size: 1.75rem;
-        font-weight: 600;
-        color: var(--text-primary);
-      }
+    [data-theme="light"] {
+      --bg-gradient: var(--light-bg);
+      --bg-color: var(--light-bg);
+      --card-color: var(--light-card-bg);
+      --input-color: var(--light-input-bg);
+      --text-primary: var(--light-text-primary);
+      --text-secondary: var(--light-text-secondary);
+      --accent-color: var(--accent-pink);
+      --border-color: var(--light-border);
+    }
 
-      .theme-toggle {
-        background: var(--input-color);
-        border: 1px solid var(--border-color);
-        color: var(--text-primary);
-        cursor: pointer;
-        width: 44px;
-        height: 44px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.2rem;
-        transition: var(--transition);
-      }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
-      .theme-toggle:hover {
-        border-color: var(--accent-color);
-        color: var(--accent-color);
-      }
+    body {
+      font-family: var(--font-family);
+      background: var(--bg-gradient);
+      color: var(--text-primary);
+      line-height: 1.6;
+      transition: var(--transition);
+      min-height: 100vh;
+      background-attachment: fixed;
+      padding: var(--spacing);
+    }
 
-      .card {
-        background-color: var(--card-color);
-        border: 1px solid var(--border-color);
-        padding: var(--spacing);
-        border-radius: var(--border-radius);
-      }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing);
+    }
 
-      pre { 
-        background-color: var(--input-color);
-        white-space: pre-wrap; 
-        word-wrap: break-word; 
-        line-height: 1.2em;
-        padding: var(--spacing);
-        border-radius: var(--border-radius);
-        border: 1px solid var(--border-color);
-      }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: var(--spacing);
+      padding-bottom: var(--spacing);
+      border-bottom: 1px solid var(--border-color);
+    }
 
-      input, button {
-        background-color: var(--input-color);
-        color: var(--text-primary);
-        border: 1px solid var(--border-color);
-        padding: 12px var(--spacing);
-        border-radius: var(--border-radius);
-        font-family: var(--font-family);
-        font-size: 0.95rem;
-        transition: var(--transition);
-      }
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
 
-      input:focus {
-        outline: none;
-        border-color: var(--accent-color);
-      }
+    .theme-toggle {
+      background: var(--input-color);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      cursor: pointer;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      transition: var(--transition);
+    }
 
-      button {
-        cursor: pointer;
-        background-color: var(--accent-color);
-        color: white;
-        border: none;
-        font-weight: 500;
-      }
+    .theme-toggle:hover {
+      border-color: var(--accent-color);
+      color: var(--accent-color);
+    }
 
-      button:hover {
-        opacity: 0.9;
-      }
+    .card {
+      background-color: var(--card-color);
+      border: 1px solid var(--border-color);
+      padding: var(--spacing);
+      border-radius: var(--border-radius);
+    }
 
-      button:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
+    pre {
+      background-color: var(--input-color);
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      line-height: 1.2em;
+      padding: var(--spacing);
+      border-radius: var(--border-radius);
+      border: 1px solid var(--border-color);
+    }
 
-      .messages {
-        height: 400px;
-        overflow-y: auto;
-        padding: var(--spacing);
-        background-color: var(--card-color);
-        border: 1px solid var(--border-color);
-        border-radius: var(--border-radius);
-      }
+    input,
+    button {
+      background-color: var(--input-color);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+      padding: 12px var(--spacing);
+      border-radius: var(--border-radius);
+      font-family: var(--font-family);
+      font-size: 0.95rem;
+      transition: var(--transition);
+    }
 
-      .log {
-        height: 150px;
-        overflow-y: auto;
-        color: var(--text-secondary);
-        font-size: 0.9rem;
-      }
+    input:focus {
+      outline: none;
+      border-color: var(--accent-color);
+    }
 
-      .connection-status {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px var(--spacing);
-        background-color: var(--card-color);
-        border: 1px solid var(--border-color);
-        border-radius: var(--border-radius);
-      }
+    button {
+      cursor: pointer;
+      background-color: var(--accent-color);
+      color: white;
+      border: none;
+      font-weight: 500;
+    }
 
-      .status-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background-color: var(--accent-yellow);
-      }
+    button:hover {
+      opacity: 0.9;
+    }
 
-      .status-dot.connected {
-        background-color: #10B981;
-      }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
 
-      .status-dot.disconnected {
-        background-color: #EF4444;
-      }
+    .messages {
+      height: 400px;
+      overflow-y: auto;
+      padding: var(--spacing);
+      background-color: var(--card-color);
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius);
+    }
 
-      ::-webkit-scrollbar {
-        width: 8px;
-      }
+    .log {
+      height: 150px;
+      overflow-y: auto;
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+    }
 
-      ::-webkit-scrollbar-track {
-        background: transparent;
-      }
+    .connection-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px var(--spacing);
+      background-color: var(--card-color);
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius);
+    }
 
-      ::-webkit-scrollbar-thumb {
-        background: var(--border-color);
-        border-radius: 4px;
-      }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: var(--accent-yellow);
+    }
 
-      ::-webkit-scrollbar-thumb:hover {
-        background: var(--accent-color);
-      }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <div class="header">
-        <div style="display: flex; align-items: center;">
-            <img src="logo.svg" alt="SHOGUN Logo" style="height: 50px; margin-right: 5px;"> 
-            <h1>d2 client</h1>
-          </div>        <button class="theme-toggle" id="themeToggle">🌙</button>
-      </div>
+    .status-dot.connected {
+      background-color: #10B981;
+    }
 
-      <div class="card">
-        <div style="display: flex; gap: var(--spacing); align-items: center;">
-          <input type="text" id="serverAddress" placeholder="Server Address" style="flex: 1;">
-          <button id="connectBtn">Connect</button>
-        </div>
-      </div>
+    .status-dot.disconnected {
+      background-color: #EF4444;
+    }
 
-      <pre id="messages" class="messages"></pre>
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
 
-      <div class="card">
-        <div style="display: flex; gap: var(--spacing); align-items: center;">
-          <input type="text" id="username" placeholder="Your name" style="width: 200px;">
-          <input type="text" id="messageInput" placeholder="Type message..." style="flex: 1;" disabled>
-          <button id="sendBtn" disabled>Send</button>
-        </div>
-      </div>
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
 
-      <div class="card">
-        <h3 style="margin-bottom: var(--spacing); color: var(--text-primary);">Log:</h3>
-        <pre id="log" class="log"></pre>
+    ::-webkit-scrollbar-thumb {
+      background: var(--border-color);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--accent-color);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="header">
+      <div style="display: flex; align-items: center;">
+        <img src="logo.svg" alt="SHOGUN Logo" style="height: 50px; margin-right: 5px;">
+        <h1>d2</h1>
+      </div> <button class="theme-toggle" id="themeToggle">🌙</button>
+    </div>
+
+    <div class="card">
+      <div style="display: flex; gap: var(--spacing); align-items: center;">
+        <input type="text" id="serverAddress" placeholder="Server Address" style="flex: 1;">
+        <button id="connectBtn">Connect</button>
       </div>
     </div>
 
-    <script>
-      const themeToggle = document.getElementById('themeToggle');
-      
-      const applyTheme = (theme) => {
-        if (theme === 'dark') {
-          document.body.setAttribute('data-theme', 'dark');
-          themeToggle.textContent = '☀️';
-        } else {
-          document.body.setAttribute('data-theme', 'light');
-          themeToggle.textContent = '🌙';
-        }
-      };
+    <pre id="messages" class="messages"></pre>
 
-      const getInitialTheme = () => {
-        const savedTheme = localStorage.getItem('theme');
-        if (savedTheme) {
-          return savedTheme;
-        }
-        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        return prefersDark ? 'dark' : 'light';
-      };
+    <div class="card">
+      <div style="display: flex; gap: var(--spacing); align-items: center;">
+        <input type="text" id="username" placeholder="Your name" style="width: 200px;">
+        <input type="text" id="messageInput" placeholder="Type message..." style="flex: 1;" disabled>
+        <button id="sendBtn" disabled>Send</button>
+      </div>
+    </div>
 
-      let currentTheme = getInitialTheme();
+    <div class="card">
+      <h3 style="margin-bottom: var(--spacing); color: var(--text-primary);">Log:</h3>
+      <pre id="log" class="log"></pre>
+    </div>
+  </div>
+
+  <script>
+    const themeToggle = document.getElementById('themeToggle');
+
+    const applyTheme = (theme) => {
+      if (theme === 'dark') {
+        document.body.setAttribute('data-theme', 'dark');
+        themeToggle.textContent = '☀️';
+      } else {
+        document.body.setAttribute('data-theme', 'light');
+        themeToggle.textContent = '🌙';
+      }
+    };
+
+    const getInitialTheme = () => {
+      const savedTheme = localStorage.getItem('theme');
+      if (savedTheme) {
+        return savedTheme;
+      }
+      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      return prefersDark ? 'dark' : 'light';
+    };
+
+    let currentTheme = getInitialTheme();
+    applyTheme(currentTheme);
+
+    themeToggle.addEventListener('click', () => {
+      currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+      localStorage.setItem('theme', currentTheme);
       applyTheme(currentTheme);
+    });
 
-      themeToggle.addEventListener('click', () => {
-        currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
-        localStorage.setItem('theme', currentTheme);
-        applyTheme(currentTheme);
-      });
+    const serverAddressInput = document.getElementById('serverAddress');
+    const connectBtn = document.getElementById('connectBtn');
+    const messagesEl = document.getElementById('messages');
+    const usernameInput = document.getElementById('username');
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const logEl = document.getElementById('log');
 
-      const serverAddressInput = document.getElementById('serverAddress');
-      const connectBtn = document.getElementById('connectBtn');
-      const messagesEl = document.getElementById('messages');
-      const usernameInput = document.getElementById('username');
-      const messageInput = document.getElementById('messageInput');
-      const sendBtn = document.getElementById('sendBtn');
-      const logEl = document.getElementById('log');
+    let bugout = null;
+    let connected = false;
 
-      let bugout = null;
-      let connected = false;
+    function log(...args) {
+      const timestamp = new Date().toLocaleTimeString();
+      const logMessage = `[${timestamp}] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ')}`;
+      console.log(...args);
+      logEl.textContent += logMessage + '\n';
+      logEl.scrollTop = logEl.scrollHeight;
+    }
 
-      function log(...args) {
-        const timestamp = new Date().toLocaleTimeString();
-        const logMessage = `[${timestamp}] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ')}`;
-        console.log(...args);
-        logEl.textContent += logMessage + '\n';
-        logEl.scrollTop = logEl.scrollHeight;
+    function updateUI() {
+      connectBtn.textContent = connected ? 'Disconnect' : 'Connect';
+      messageInput.disabled = !connected;
+      sendBtn.disabled = !connected;
+      if (connected) {
+        messageInput.placeholder = "Type message...";
+      } else {
+        messageInput.placeholder = "Connect to start chatting...";
+      }
+    }
+
+    function initClient() {
+      if (bugout) {
+        bugout.destroy();
+        bugout = null;
+        connected = false;
+        updateUI();
+        log("🔌 Disconnected.");
+        return;
       }
 
-      function updateUI() {
-        connectBtn.textContent = connected ? 'Disconnect' : 'Connect';
-        messageInput.disabled = !connected;
-        sendBtn.disabled = !connected;
-        if (connected) {
-          messageInput.placeholder = "Type message...";
-        } else {
-          messageInput.placeholder = "Connect to start chatting...";
-        }
+      const serverAddress = serverAddressInput.value.trim();
+      if (!serverAddress) {
+        log("⚠️ Please enter a server address.");
+        return;
       }
 
-      function initClient() {
-        if (bugout) {
-          bugout.destroy();
-          bugout = null;
-          connected = false;
+      log("🔄 Connecting to chat server...", serverAddress);
+
+      try {
+        if (typeof Bugoff !== 'function') throw new Error("Bugoff library not available");
+
+        bugout = new Bugoff(serverAddress);
+
+        bugout.on("server", () => {
+          log("✅ Connected to server");
+          connected = true;
           updateUI();
-          log("🔌 Disconnected.");
-          return;
-        }
+          refreshMessages();
+        });
 
-        const serverAddress = serverAddressInput.value.trim();
-        if (!serverAddress) {
-          log("⚠️ Please enter a server address.");
-          return;
-        }
-        
-        log("🔄 Connecting to chat server...", serverAddress);
-
-        try {
-          if (typeof Bugoff !== 'function') throw new Error("Bugoff library not available");
-
-          bugout = new Bugoff(serverAddress);
-
-          bugout.on("server", () => {
-            log("✅ Connected to server");
-            connected = true;
-            updateUI();
+        bugout.on("message", (address, message) => {
+          if (message === "refresh") {
             refreshMessages();
-          });
+          }
+        });
 
-          bugout.on("message", (address, message) => {
-            if (message === "refresh") {
-              refreshMessages();
-            }
-          });
+        bugout.on("decrypted", (address, pubkeys, message) => {
+          log("🤫 Decrypted message received");
+          if (message === "refresh") {
+            refreshMessages();
+          }
+        });
 
-          bugout.on("decrypted", (address, pubkeys, message) => {
-            log("🤫 Decrypted message received");
-            if (message === "refresh") {
-              refreshMessages();
-            }
-          });
+        bugout.on("wireseen", (count) => {
+          log(`🔗 ${count} peer(s) connected`);
+          connected = count > 0;
+          updateUI();
+        });
 
-          bugout.on("wireseen", (count) => {
-            log(`🔗 ${count} peer(s) connected`);
-            connected = count > 0;
-            updateUI();
-          });
-
-          bugout.on("wireleft", (count) => {
-            log(`👋 Peer disconnected. ${count} remaining`);
-            connected = count > 0;
-            if (!connected) {
-              log("❌ Connection lost");
-              if (bugout) bugout.destroy();
-              bugout = null;
-            }
-            updateUI();
-          });
-
-          bugout.on("close", () => {
-            log("❌ Connection closed");
-            connected = false;
-            bugout = null;
-            updateUI();
-          });
-
-          bugout.on("error", (error) => {
-            log("🚫 Connection error:", error.message || error);
-            connected = false;
+        bugout.on("wireleft", (count) => {
+          log(`👋 Peer disconnected. ${count} remaining`);
+          connected = count > 0;
+          if (!connected) {
+            log("❌ Connection lost");
             if (bugout) bugout.destroy();
             bugout = null;
-            updateUI();
-          });
-        } catch (error) {
-          log("💥 Failed to initialize:", error.message);
+          }
+          updateUI();
+        });
+
+        bugout.on("close", () => {
+          log("❌ Connection closed");
           connected = false;
           bugout = null;
           updateUI();
-        }
+        });
+
+        bugout.on("error", (error) => {
+          log("🚫 Connection error:", error.message || error);
+          connected = false;
+          if (bugout) bugout.destroy();
+          bugout = null;
+          updateUI();
+        });
+      } catch (error) {
+        log("💥 Failed to initialize:", error.message);
+        connected = false;
+        bugout = null;
+        updateUI();
+      }
+    }
+
+    function sendMessage() {
+      if (!connected || !messageInput.value.trim()) return;
+
+      const user = usernameInput.value.trim() || "Anonymous";
+      localStorage.setItem("bugout-username", user);
+
+      const formattedMessage = `${user}: ${messageInput.value.trim()}`;
+      log("📤 Sending:", formattedMessage);
+
+      try {
+        bugout.rpc("post", formattedMessage, (ok) => {
+          if (ok) {
+            log("✅ Message sent successfully");
+            messageInput.value = "";
+            messageInput.focus();
+            refreshMessages(); // Refresh after sending
+          } else {
+            log("❌ Failed to send message");
+          }
+        });
+      } catch (error) {
+        log("💥 Send error:", error.message);
+      }
+    }
+
+    function refreshMessages() {
+      if (!connected || !bugout) {
+        messagesEl.textContent = 'Not connected.';
+        return;
       }
 
-      function sendMessage() {
-        if (!connected || !messageInput.value.trim()) return;
+      try {
+        bugout.rpc("list", null, (messageList) => {
+          if (!Array.isArray(messageList)) {
+            log("⚠️ Invalid message list received");
+            return;
+          }
 
-        const user = usernameInput.value.trim() || "Anonymous";
-        localStorage.setItem("bugout-username", user);
+          log(`📨 Loaded ${messageList.length} messages`);
 
-        const formattedMessage = `${user}: ${messageInput.value.trim()}`;
-        log("📤 Sending:", formattedMessage);
-
-        try {
-          bugout.rpc("post", formattedMessage, (ok) => {
-            if (ok) {
-              log("✅ Message sent successfully");
-              messageInput.value = "";
-              messageInput.focus();
-              refreshMessages(); // Refresh after sending
-            } else {
-              log("❌ Failed to send message");
-            }
+          const formattedMessages = messageList.map((m) => {
+            const time = new Date(m.t).toLocaleTimeString();
+            return `[${time}] ${m.m || ''}`;
           });
-        } catch (error) {
-          log("💥 Send error:", error.message);
-        }
+
+          messagesEl.textContent = formattedMessages.join('\n');
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+        });
+      } catch (error) {
+        log("💥 Refresh error:", error.message);
       }
+    }
 
-      function refreshMessages() {
-        if (!connected || !bugout) {
-          messagesEl.textContent = 'Not connected.';
-          return;
-        }
-
-        try {
-          bugout.rpc("list", null, (messageList) => {
-            if (!Array.isArray(messageList)) {
-              log("⚠️ Invalid message list received");
-              return;
-            }
-
-            log(`📨 Loaded ${messageList.length} messages`);
-            
-            const formattedMessages = messageList.map((m) => {
-              const time = new Date(m.t).toLocaleTimeString();
-              return `[${time}] ${m.m || ''}`;
-            });
-
-            messagesEl.textContent = formattedMessages.join('\n');
-            messagesEl.scrollTop = messagesEl.scrollHeight;
-          });
-        } catch (error) {
-          log("💥 Refresh error:", error.message);
-        }
+    // Event Listeners
+    connectBtn.addEventListener('click', initClient);
+    sendBtn.addEventListener('click', sendMessage);
+    messageInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
       }
+    });
 
-      // Event Listeners
-      connectBtn.addEventListener('click', initClient);
-      sendBtn.addEventListener('click', sendMessage);
-      messageInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          sendMessage();
-        }
-      });
+    // Initial setup
+    serverAddressInput.value = window.location.hash.substr(1) || "";
+    usernameInput.value = localStorage.getItem("bugout-username") || "";
+    log("🦄 Minimal Messenger initialized.");
+    log("Enter server address and click 'Connect'.");
 
-      // Initial setup
-      serverAddressInput.value = window.location.hash.substr(1) || "";
-      usernameInput.value = localStorage.getItem("bugout-username") || "";
-      log("🦄 Minimal Messenger initialized.");
-      log("Enter server address and click 'Connect'.");
+  </script>
+  <footer>
+    <div style="text-align: center;">
+      <p style="color: var(--text-secondary); margin: 0; font-size: 1.2rem; line-height: 1.5;">
+        <a href="https://github.com/scobru/shogun-d2-app"
+          style="color: var(--accent-color); text-decoration: none;">repo</a>
+        build with ❤️ by
+        <a href="https://github.com/scobru" style="color: var(--accent-color); text-decoration: none;">scobru</a>
+        • part of
+        <a href="https://shogun-info.vercel.app" style="color: var(--accent-color); text-decoration: none;">shogun
+          project</a>
+      </p>
+    </div>
+  </footer>
+</body>
 
-    </script>
-    <footer>
-        <div style="text-align: center;">
-            <p style="color: var(--text-secondary); margin: 0; font-size: 1.2rem; line-height: 1.5;">
-                <a href="https://github.com/scobru/shogun-d2-app" style="color: var(--accent-color); text-decoration: none;">repo</a>
-                build with ❤️ by 
-                <a href="https://github.com/scobru" style="color: var(--accent-color); text-decoration: none;">scobru</a>
-                • part of 
-                <a href="https://shogun-info.vercel.app" style="color: var(--accent-color); text-decoration: none;">shogun project</a>
-            </p>
-        </div>
-    </footer>
-  </body>
 </html>
