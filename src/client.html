@@ -9,7 +9,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bugout@0.0.13/docs/bugout.min.js"></script>
+  <script src="https://chr15m.github.io/bugout/bugout.min.js"></script>
   <script>
     (function () {
       function Bugoff(identifier, opts) {
@@ -323,6 +323,8 @@
       margin-bottom: var(--spacing);
       padding-bottom: var(--spacing);
       border-bottom: 1px solid var(--border-color);
+      flex-wrap: wrap;
+      gap: var(--spacing);
     }
 
     h1 {
@@ -344,6 +346,7 @@
       justify-content: center;
       font-size: 1.2rem;
       transition: var(--transition);
+      flex-shrink: 0;
     }
 
     .theme-toggle:hover {
@@ -391,6 +394,7 @@
       color: white;
       border: none;
       font-weight: 500;
+      white-space: nowrap;
     }
 
     button:hover {
@@ -443,6 +447,27 @@
       background-color: #EF4444;
     }
 
+    .input-group {
+      display: flex;
+      gap: var(--spacing);
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .input-group input {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .input-group button {
+      flex-shrink: 0;
+    }
+
+    .username-input {
+      width: 200px;
+      flex-shrink: 0;
+    }
+
     ::-webkit-scrollbar {
       width: 8px;
     }
@@ -459,6 +484,134 @@
     ::-webkit-scrollbar-thumb:hover {
       background: var(--accent-color);
     }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+      body {
+        padding: 12px;
+      }
+
+      .container {
+        gap: 12px;
+      }
+
+      .header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+      }
+
+      h1 {
+        font-size: 1.5rem;
+      }
+
+      .card {
+        padding: 12px;
+      }
+
+      .input-group {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+      }
+
+      .input-group input,
+      .input-group button {
+        width: 100%;
+      }
+
+      .username-input {
+        width: 100%;
+      }
+
+      .messages {
+        height: 300px;
+        padding: 12px;
+      }
+
+      .log {
+        height: 120px;
+      }
+
+      input,
+      button {
+        padding: 10px 12px;
+        font-size: 0.9rem;
+      }
+
+      pre {
+        padding: 12px;
+        font-size: 0.85rem;
+      }
+    }
+
+    @media (max-width: 480px) {
+      body {
+        padding: 8px;
+      }
+
+      .container {
+        gap: 8px;
+      }
+
+      .card {
+        padding: 8px;
+      }
+
+      h1 {
+        font-size: 1.25rem;
+      }
+
+      .theme-toggle {
+        width: 40px;
+        height: 40px;
+        font-size: 1rem;
+      }
+
+      .messages {
+        height: 250px;
+        padding: 8px;
+      }
+
+      .log {
+        height: 100px;
+        font-size: 0.8rem;
+      }
+
+      input,
+      button {
+        padding: 8px 10px;
+        font-size: 0.85rem;
+      }
+
+      pre {
+        padding: 8px;
+        font-size: 0.8rem;
+      }
+    }
+
+    /* Footer responsive */
+    footer {
+      margin-top: auto;
+      padding-top: var(--spacing);
+    }
+
+    footer p {
+      font-size: 1rem;
+      line-height: 1.4;
+    }
+
+    @media (max-width: 768px) {
+      footer p {
+        font-size: 0.9rem;
+      }
+    }
+
+    @media (max-width: 480px) {
+      footer p {
+        font-size: 0.8rem;
+      }
+    }
   </style>
 </head>
 
@@ -472,18 +625,19 @@
     </div>
 
     <div class="card">
-      <div style="display: flex; gap: var(--spacing); align-items: center;">
-        <input type="text" id="serverAddress" placeholder="Server Address" style="flex: 1;">
+      <div class="input-group">
+        <input type="text" id="serverAddress" placeholder="Server Address">
         <button id="connectBtn">Connect</button>
+        <button id="testBtn" onclick="testConnectivity()">Test</button>
       </div>
     </div>
 
     <pre id="messages" class="messages"></pre>
 
     <div class="card">
-      <div style="display: flex; gap: var(--spacing); align-items: center;">
-        <input type="text" id="username" placeholder="Your name" style="width: 200px;">
-        <input type="text" id="messageInput" placeholder="Type message..." style="flex: 1;" disabled>
+      <div class="input-group">
+        <input type="text" id="username" placeholder="Your name" class="username-input">
+        <input type="text" id="messageInput" placeholder="Type message..." disabled>
         <button id="sendBtn" disabled>Send</button>
       </div>
     </div>
@@ -571,28 +725,81 @@
         return;
       }
 
+      // Mobile debugging logs
+      log("📱 Device Info:", {
+        userAgent: navigator.userAgent,
+        platform: navigator.platform,
+        onLine: navigator.onLine,
+        connection: navigator.connection ? {
+          effectiveType: navigator.connection.effectiveType,
+          downlink: navigator.connection.downlink,
+          rtt: navigator.connection.rtt
+        } : 'Not available'
+      });
+
+      // Check WebRTC support
+      const rtcSupport = {
+        getUserMedia: !!(navigator.getUserMedia || navigator.mediaDevices?.getUserMedia),
+        RTCPeerConnection: !!window.RTCPeerConnection,
+        RTCDataChannel: !!window.RTCDataChannel
+      };
+      log("🔧 WebRTC Support:", rtcSupport);
+
+      // Check if we're on mobile
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      log("📱 Mobile Device:", isMobile);
+
       log("🔄 Connecting to chat server...", serverAddress);
 
       try {
-        if (typeof Bugoff !== 'function') throw new Error("Bugoff library not available");
+        if (typeof Bugoff !== 'function') {
+          log("❌ Bugoff library not available");
+          throw new Error("Bugoff library not available");
+        }
 
+        log("✅ Bugoff library found, creating instance...");
         bugout = new Bugoff(serverAddress);
+        log("✅ Bugoff instance created successfully");
+
+        // Add connection timeout with fallback
+        const connectionTimeout = setTimeout(() => {
+          if (!connected) {
+            log("⏰ Connection timeout - no response from server");
+            log("💡 Possible issues:");
+            log("   - Server not reachable");
+            log("   - Network restrictions");
+            log("   - WebRTC blocked by firewall");
+            log("   - Mobile carrier blocking P2P");
+
+            // Try fallback connection method for mobile
+            if (isMobile) {
+              log("🔄 Trying fallback connection method for mobile...");
+              tryFallbackConnection(serverAddress);
+            }
+          }
+        }, 8000); // Reduced timeout for faster fallback
 
         bugout.on("server", () => {
+          clearTimeout(connectionTimeout);
           log("✅ Connected to server");
           connected = true;
           updateUI();
           refreshMessages();
         });
 
+        bugout.on("seen", (address) => {
+          log("👀 Peer seen:", address);
+        });
+
         bugout.on("message", (address, message) => {
+          log("📨 Raw message received from:", address, "Message:", message);
           if (message === "refresh") {
             refreshMessages();
           }
         });
 
         bugout.on("decrypted", (address, pubkeys, message) => {
-          log("🤫 Decrypted message received");
+          log("🤫 Decrypted message received from:", address, "Message:", message);
           if (message === "refresh") {
             refreshMessages();
           }
@@ -616,6 +823,7 @@
         });
 
         bugout.on("close", () => {
+          clearTimeout(connectionTimeout);
           log("❌ Connection closed");
           connected = false;
           bugout = null;
@@ -623,17 +831,243 @@
         });
 
         bugout.on("error", (error) => {
+          clearTimeout(connectionTimeout);
           log("🚫 Connection error:", error.message || error);
+          log("🔍 Error details:", {
+            name: error.name,
+            stack: error.stack,
+            type: typeof error
+          });
           connected = false;
           if (bugout) bugout.destroy();
           bugout = null;
           updateUI();
         });
+
+        // Add network status monitoring
+        window.addEventListener('online', () => {
+          log("🌐 Network: Online");
+        });
+
+        window.addEventListener('offline', () => {
+          log("🌐 Network: Offline");
+          if (connected) {
+            log("❌ Connection lost due to network");
+            connected = false;
+            updateUI();
+          }
+        });
+
       } catch (error) {
         log("💥 Failed to initialize:", error.message);
+        log("🔍 Error details:", {
+          name: error.name,
+          stack: error.stack,
+          type: typeof error
+        });
         connected = false;
         bugout = null;
         updateUI();
+      }
+    }
+
+    // Fallback connection method for mobile devices
+    function tryFallbackConnection(serverAddress) {
+      log("🔄 Attempting fallback connection...");
+
+      // Diagnose WebRTC issues
+      diagnoseWebRTC();
+
+      // Try to create a new Bugout instance with different options
+      try {
+        if (bugout) {
+          bugout.destroy();
+          bugout = null;
+        }
+
+        // Create new instance with explicit options
+        const fallbackOptions = {
+          seed: undefined, // Force new seed
+          announce: false, // Disable announce to reduce network overhead
+          timeout: 5000,   // Shorter timeout
+          // Add TURN server configuration for mobile
+          rtcConfig: {
+            iceServers: [
+              { urls: 'stun:stun.l.google.com:19302' },
+              { urls: 'stun:stun1.l.google.com:19302' },
+              { urls: 'stun:stun2.l.google.com:19302' },
+              { urls: 'stun:stun3.l.google.com:19302' },
+              { urls: 'stun:stun4.l.google.com:19302' }
+            ]
+          }
+        };
+
+        log("🔄 Creating fallback Bugout instance...");
+        bugout = new Bugoff(serverAddress, fallbackOptions);
+
+        // Set up event listeners for fallback
+        const fallbackTimeout = setTimeout(() => {
+          if (!connected) {
+            log("❌ Fallback connection also failed");
+            log("💡 Mobile WebRTC connection blocked. Try:");
+            log("   - Using a different network (WiFi instead of mobile data)");
+            log("   - Using a different browser");
+            log("   - Checking if your carrier blocks P2P connections");
+            if (bugout) bugout.destroy();
+            bugout = null;
+            updateUI();
+          }
+        }, 6000);
+
+        bugout.on("server", () => {
+          clearTimeout(fallbackTimeout);
+          log("✅ Fallback connection successful!");
+          connected = true;
+          updateUI();
+          refreshMessages();
+        });
+
+        bugout.on("error", (error) => {
+          clearTimeout(fallbackTimeout);
+          log("❌ Fallback connection error:", error.message || error);
+          if (bugout) bugout.destroy();
+          bugout = null;
+          updateUI();
+        });
+
+        // Copy other event listeners from main connection
+        bugout.on("seen", (address) => log("👀 Fallback: Peer seen:", address));
+        bugout.on("wireseen", (count) => {
+          log(`🔗 Fallback: ${count} peer(s) connected`);
+          connected = count > 0;
+          updateUI();
+        });
+        bugout.on("wireleft", (count) => {
+          log(`👋 Fallback: Peer disconnected. ${count} remaining`);
+          connected = count > 0;
+          if (!connected) {
+            log("❌ Fallback connection lost");
+            if (bugout) bugout.destroy();
+            bugout = null;
+          }
+          updateUI();
+        });
+
+      } catch (error) {
+        log("💥 Fallback connection failed:", error.message);
+        if (bugout) bugout.destroy();
+        bugout = null;
+        updateUI();
+      }
+    }
+
+    // Diagnose WebRTC issues
+    function diagnoseWebRTC() {
+      log("🔍 Diagnosing WebRTC issues...");
+
+      try {
+        // Test basic WebRTC functionality
+        if (window.RTCPeerConnection) {
+          const pc = new RTCPeerConnection();
+
+          // Test ICE gathering
+          pc.onicecandidate = (event) => {
+            if (event.candidate) {
+              log("🔍 ICE candidate found:", event.candidate.type);
+            }
+          };
+
+          pc.onicegatheringstatechange = () => {
+            log("🔍 ICE gathering state:", pc.iceGatheringState);
+          };
+
+          pc.onconnectionstatechange = () => {
+            log("🔍 Connection state:", pc.connectionState);
+          };
+
+          // Create a data channel to trigger ICE gathering
+          const dc = pc.createDataChannel('test');
+
+          // Set a timeout for diagnosis
+          setTimeout(() => {
+            log("🔍 WebRTC diagnosis complete");
+            log("🔍 ICE gathering state:", pc.iceGatheringState);
+            log("🔍 Connection state:", pc.connectionState);
+            pc.close();
+          }, 3000);
+
+        } else {
+          log("❌ RTCPeerConnection not available");
+        }
+      } catch (error) {
+        log("❌ WebRTC diagnosis failed:", error.message);
+      }
+    }
+
+    // Test basic connectivity
+    async function testConnectivity() {
+      log("🧪 Testing basic connectivity...");
+
+      try {
+        // Test 1: Basic HTTP connectivity
+        log("🧪 Test 1: HTTP connectivity...");
+        const response = await fetch('https://httpbin.org/get', {
+          method: 'GET',
+          mode: 'cors'
+        });
+
+        if (response.ok) {
+          log("✅ HTTP connectivity: OK");
+        } else {
+          log("❌ HTTP connectivity: Failed");
+        }
+
+        // Test 2: WebRTC basic functionality
+        log("🧪 Test 2: WebRTC basic functionality...");
+        if (window.RTCPeerConnection) {
+          try {
+            const pc = new RTCPeerConnection();
+            const dc = pc.createDataChannel('test');
+
+            let iceCandidatesFound = 0;
+            pc.onicecandidate = (event) => {
+              if (event.candidate) {
+                iceCandidatesFound++;
+                log(`✅ ICE candidate ${iceCandidatesFound}: ${event.candidate.type}`);
+              }
+            };
+
+            setTimeout(() => {
+              if (iceCandidatesFound > 0) {
+                log(`✅ WebRTC: ${iceCandidatesFound} ICE candidates found`);
+              } else {
+                log("⚠️ WebRTC: No ICE candidates found (possible network restriction)");
+              }
+              pc.close();
+            }, 5000);
+
+          } catch (error) {
+            log("❌ WebRTC test failed:", error.message);
+          }
+        } else {
+          log("❌ WebRTC not supported");
+        }
+
+        // Test 3: Network information
+        log("🧪 Test 3: Network information...");
+        if (navigator.connection) {
+          log("✅ Network API available:", {
+            effectiveType: navigator.connection.effectiveType,
+            downlink: navigator.connection.downlink,
+            rtt: navigator.connection.rtt,
+            saveData: navigator.connection.saveData
+          });
+        } else {
+          log("⚠️ Network API not available");
+        }
+
+      } catch (error) {
+        log("❌ Connectivity test failed:", error.message);
       }
     }
 

@@ -17,6 +17,9 @@ export default defineConfig({
         main: resolve(__dirname, 'src/index.html'),
         client: resolve(__dirname, 'src/client.html'),
         server: resolve(__dirname, 'src/server.html'),
+        bugout: resolve(__dirname, 'src/bugout.min.js'),
+        bugout_min: resolve(__dirname, 'src/bugout.min.js'),
+        
       },
     },
   }

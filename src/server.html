@@ -11,7 +11,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bugout@0.0.13/docs/bugout.min.js"></script>
+  <script src="https://chr15m.github.io/bugout/bugout.min.js"></script>
   <script>
     (function () {
       function Bugoff(identifier, opts) {
@@ -563,17 +563,46 @@
 
         server.on("seen", (address) => {
           log("👋 New peer connected:", address);
+          log("📱 Peer details:", {
+            address: address,
+            timestamp: new Date().toISOString(),
+            userAgent: "Unknown" // Bugout doesn't expose user agent
+          });
         });
 
         server.on("wireleft", (address) => {
           log("🔌 Peer disconnected:", address);
+          log("📱 Disconnect details:", {
+            address: address,
+            timestamp: new Date().toISOString()
+          });
+        });
+
+        // Add more detailed connection monitoring
+        server.on("wireseen", (count) => {
+          log("🔗 Active connections:", count);
+        });
+
+        server.on("wireleft", (count) => {
+          log("👋 Remaining connections:", count);
+        });
+
+        server.on("error", (error) => {
+          log("🚫 Server error:", error.message || error);
+          log("🔍 Server error details:", {
+            name: error.name,
+            stack: error.stack,
+            type: typeof error
+          });
         });
 
         server.register("list", (address, args, cb) => {
+          log("📋 List request from:", address);
           cb(messages);
         });
 
         server.register("post", (address, args) => {
+          log("📬 Post request from:", address, "Message:", args);
           const message = {
             f: address, // from
             m: args,    // message
@@ -590,6 +619,12 @@
         const address = server.address();
         log("✅ Server initialized successfully");
         log("🏠 Server address:", address);
+        log("🔧 Server capabilities:", {
+          hasWebRTC: !!window.RTCPeerConnection,
+          hasDataChannel: !!window.RTCDataChannel,
+          platform: navigator.platform,
+          userAgent: navigator.userAgent.substring(0, 100) + "..."
+        });
 
         clientUrl = `${window.location.href.replace('server', 'client')}#${address}`;
         generateQRCode(clientUrl);
@@ -597,6 +632,11 @@
 
       } catch (error) {
         log("❌ ERROR:", error.message);
+        log("🔍 Server error details:", {
+          name: error.name,
+          stack: error.stack,
+          type: typeof error
+        });
       }
     }
 

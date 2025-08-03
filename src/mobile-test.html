@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mobile Compatibility Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+
+        .test-section {
+            background: white;
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #007cba;
+        }
+
+        .success {
+            border-left-color: #00a32a;
+        }
+
+        .warning {
+            border-left-color: #dba617;
+        }
+
+        .error {
+            border-left-color: #d63638;
+        }
+
+        .log {
+            background: #f6f7f7;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>📱 Mobile Compatibility Test</h1>
+
+    <div class="test-section">
+        <h3>🔍 Device Information</h3>
+        <div id="device-info"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>🌐 Network Information</h3>
+        <div id="network-info"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>🔧 WebRTC Support</h3>
+        <div id="webrtc-info"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>📡 Connection Test</h3>
+        <button onclick="testConnection()">Test Connection</button>
+        <div id="connection-test"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>📋 Test Logs</h3>
+        <div id="logs" class="log"></div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logsDiv = document.getElementById('logs');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.style.color = type === 'error' ? 'red' : type === 'warning' ? 'orange' : 'black';
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            logsDiv.appendChild(logEntry);
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+            console.log(message);
+        }
+
+        // Device Information
+        function checkDeviceInfo() {
+            const deviceInfo = document.getElementById('device-info');
+            const info = {
+                userAgent: navigator.userAgent,
+                platform: navigator.platform,
+                language: navigator.language,
+                cookieEnabled: navigator.cookieEnabled,
+                onLine: navigator.onLine,
+                hardwareConcurrency: navigator.hardwareConcurrency,
+                deviceMemory: navigator.deviceMemory,
+                maxTouchPoints: navigator.maxTouchPoints
+            };
+
+            deviceInfo.innerHTML = Object.entries(info).map(([key, value]) =>
+                `<div><strong>${key}:</strong> ${value}</div>`
+            ).join('');
+
+            log('Device info collected');
+        }
+
+        // Network Information
+        function checkNetworkInfo() {
+            const networkInfo = document.getElementById('network-info');
+            const info = {};
+
+            if (navigator.connection) {
+                info.effectiveType = navigator.connection.effectiveType;
+                info.downlink = navigator.connection.downlink;
+                info.rtt = navigator.connection.rtt;
+                info.saveData = navigator.connection.saveData;
+            } else {
+                info.connection = 'Not available';
+            }
+
+            info.onLine = navigator.onLine;
+
+            networkInfo.innerHTML = Object.entries(info).map(([key, value]) =>
+                `<div><strong>${key}:</strong> ${value}</div>`
+            ).join('');
+
+            log('Network info collected');
+        }
+
+        // WebRTC Support
+        function checkWebRTCSupport() {
+            const webrtcInfo = document.getElementById('webrtc-info');
+            const support = {
+                RTCPeerConnection: !!window.RTCPeerConnection,
+                RTCDataChannel: !!window.RTCDataChannel,
+                getUserMedia: !!(navigator.getUserMedia || navigator.mediaDevices?.getUserMedia),
+                RTCRtpSender: !!window.RTCRtpSender,
+                RTCRtpReceiver: !!window.RTCRtpReceiver
+            };
+
+            const allSupported = Object.values(support).every(Boolean);
+            webrtcInfo.className = `test-section ${allSupported ? 'success' : 'warning'}`;
+
+            webrtcInfo.innerHTML = Object.entries(support).map(([key, supported]) =>
+                `<div><strong>${key}:</strong> ${supported ? '✅' : '❌'}</div>`
+            ).join('');
+
+            log(`WebRTC support: ${allSupported ? 'Full' : 'Partial'}`);
+        }
+
+        // Connection Test
+        async function testConnection() {
+            const connectionTest = document.getElementById('connection-test');
+            connectionTest.innerHTML = '<div>Testing connection...</div>';
+
+            try {
+                // Test basic connectivity
+                log('Testing basic connectivity...');
+                const response = await fetch('https://httpbin.org/get', {
+                    method: 'GET',
+                    mode: 'cors'
+                });
+
+                if (response.ok) {
+                    log('✅ Basic connectivity: OK');
+                    connectionTest.innerHTML = '<div style="color: green;">✅ Basic connectivity: OK</div>';
+                } else {
+                    log('❌ Basic connectivity: Failed');
+                    connectionTest.innerHTML = '<div style="color: red;">❌ Basic connectivity: Failed</div>';
+                }
+
+                // Test WebRTC
+                log('Testing WebRTC...');
+                if (window.RTCPeerConnection) {
+                    try {
+                        const pc = new RTCPeerConnection();
+                        const dc = pc.createDataChannel('test');
+
+                        dc.onopen = () => {
+                            log('✅ WebRTC DataChannel: OK');
+                            connectionTest.innerHTML += '<div style="color: green;">✅ WebRTC DataChannel: OK</div>';
+                            dc.close();
+                            pc.close();
+                        };
+
+                        dc.onerror = (error) => {
+                            log('❌ WebRTC DataChannel: Failed', error);
+                            connectionTest.innerHTML += '<div style="color: red;">❌ WebRTC DataChannel: Failed</div>';
+                        };
+
+                        // Set a timeout
+                        setTimeout(() => {
+                            if (dc.readyState !== 'open') {
+                                log('⚠️ WebRTC DataChannel: Timeout');
+                                connectionTest.innerHTML += '<div style="color: orange;">⚠️ WebRTC DataChannel: Timeout</div>';
+                            }
+                        }, 5000);
+
+                    } catch (error) {
+                        log('❌ WebRTC test failed:', error);
+                        connectionTest.innerHTML += '<div style="color: red;">❌ WebRTC test failed</div>';
+                    }
+                } else {
+                    log('❌ WebRTC not supported');
+                    connectionTest.innerHTML += '<div style="color: red;">❌ WebRTC not supported</div>';
+                }
+
+            } catch (error) {
+                log('❌ Connection test failed:', error);
+                connectionTest.innerHTML = '<div style="color: red;">❌ Connection test failed</div>';
+            }
+        }
+
+        // Initialize tests
+        window.addEventListener('load', () => {
+            log('Mobile compatibility test started');
+            checkDeviceInfo();
+            checkNetworkInfo();
+            checkWebRTCSupport();
+
+            // Monitor network changes
+            window.addEventListener('online', () => {
+                log('🌐 Network: Online');
+                checkNetworkInfo();
+            });
+
+            window.addEventListener('offline', () => {
+                log('🌐 Network: Offline');
+                checkNetworkInfo();
+            });
+        });
+    </script>
+</body>
+
+</html>
